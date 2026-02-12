@@ -5,13 +5,19 @@ import { Plus, Clock, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 import { PriorityBadge, StatusBadge } from '../components/StatusBadge';
 import SLAProgressBar from '../components/SLAProgressBar';
 
-const UserDashboard: React.FC = () => {
+interface UserDashboardProps {
+    currentPage?: string;
+}
+
+const UserDashboard: React.FC<UserDashboardProps> = ({ currentPage = 'dashboard' }) => {
     const [tickets, setTickets] = useState<TicketResponse[]>([]);
     const [activeTickets, setActiveTickets] = useState<TicketResponse[]>([]);
     const [highPriorityTickets, setHighPriorityTickets] = useState<TicketResponse[]>([]);
     const [breachedTickets, setBreachedTickets] = useState<TicketResponse[]>([]);
     const [loading, setLoading] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -20,6 +26,9 @@ const UserDashboard: React.FC = () => {
 
     useEffect(() => {
         loadTickets();
+        // Refresh every 10 seconds for near real-time updates
+        const interval = setInterval(loadTickets, 10000);
+        return () => clearInterval(interval);
     }, []);
 
     const loadTickets = async () => {
@@ -42,13 +51,32 @@ const UserDashboard: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setError(null);
+        setSuccess(null);
+
         try {
             await api.users.createTicket(formData);
+            setSuccess('Ticket created successfully!');
             setShowForm(false);
             setFormData({ title: '', description: '', priority: 'MEDIUM' });
             loadTickets();
-        } catch (error) {
+
+            // Immediately refresh to show the new ticket
+            await loadTickets();
+
+            // Clear success message after 3 seconds
+            setTimeout(() => setSuccess(null), 3000);
+        } catch (error: any) {
             console.error('Error creating ticket:', error);
+
+            // Check if it's an authentication error
+            if (error.response?.status === 401) {
+                setError('You must be logged in to create a ticket. Please log in with user@company.com / password123');
+            } else if (error.response?.data?.detail) {
+                setError(`Error: ${error.response.data.detail}`);
+            } else {
+                setError('Failed to create ticket. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
@@ -70,6 +98,22 @@ const UserDashboard: React.FC = () => {
                     Raise Ticket
                 </button>
             </div>
+
+            {/* Success Message */}
+            {success && (
+                <div className="bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 px-4 py-3 rounded-lg flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>{success}</span>
+                </div>
+            )}
+
+            {/* Error Message */}
+            {error && (
+                <div className="bg-rose-500/10 border border-rose-500/50 text-rose-400 px-4 py-3 rounded-lg flex items-center gap-2">
+                    <XCircle className="w-5 h-5" />
+                    <span>{error}</span>
+                </div>
+            )}
 
             {/* Raise Ticket Form */}
             {showForm && (

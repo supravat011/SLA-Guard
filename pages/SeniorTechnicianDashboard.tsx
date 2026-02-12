@@ -4,11 +4,29 @@ import { AlertOctagon, Clock, CheckCircle, TrendingUp } from 'lucide-react';
 import { PriorityBadge, StatusBadge } from '../components/StatusBadge';
 import SLAProgressBar from '../components/SLAProgressBar';
 
-const SeniorTechnicianDashboard: React.FC = () => {
+interface SeniorTechnicianDashboardProps {
+    currentPage?: string;
+}
+
+const SeniorTechnicianDashboard: React.FC<SeniorTechnicianDashboardProps> = ({ currentPage = 'dashboard' }) => {
     const [escalatedTickets, setEscalatedTickets] = useState<TicketResponse[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedTicket, setSelectedTicket] = useState<TicketResponse | null>(null);
     const [progressNotes, setProgressNotes] = useState('');
+
+    // Filter tickets based on current page
+    const getFilteredTickets = () => {
+        if (currentPage === 'alerts') {
+            // Show only critical priority or very high risk escalated tickets
+            return escalatedTickets.filter(ticket =>
+                ticket.priority === 'CRITICAL' ||
+                ticket.risk_percentage >= 90
+            );
+        }
+        return escalatedTickets;
+    };
+
+    const filteredTickets = getFilteredTickets();
 
     useEffect(() => {
         loadEscalatedTickets();
@@ -84,8 +102,14 @@ const SeniorTechnicianDashboard: React.FC = () => {
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>
-                    <h2 className="text-2xl font-bold text-white tracking-wide">Senior Technician Dashboard</h2>
-                    <p className="text-slate-400 text-sm">Handle escalated and critical tickets</p>
+                    <h2 className="text-2xl font-bold text-white tracking-wide">
+                        {currentPage === 'alerts' ? 'Critical Escalations' : currentPage === 'all-tickets' ? 'All Escalated Tickets' : 'Senior Technician Dashboard'}
+                    </h2>
+                    <p className="text-slate-400 text-sm">
+                        {currentPage === 'alerts'
+                            ? 'Most critical escalated tickets requiring immediate expert attention'
+                            : 'Handle escalated and critical tickets'}
+                    </p>
                 </div>
                 <div className="flex items-center gap-3 text-sm font-medium text-slate-300 bg-space-800 px-4 py-2 rounded-lg border border-space-border">
                     <span className="flex items-center gap-2">
@@ -93,7 +117,7 @@ const SeniorTechnicianDashboard: React.FC = () => {
                         Online
                     </span>
                     <span className="text-space-border">|</span>
-                    <span>{escalatedTickets.length} Escalated</span>
+                    <span>{filteredTickets.length} Escalated</span>
                 </div>
             </div>
 
@@ -140,14 +164,20 @@ const SeniorTechnicianDashboard: React.FC = () => {
 
             {/* Escalated Tickets List */}
             <div className="space-y-4">
-                {escalatedTickets.length === 0 ? (
+                {filteredTickets.length === 0 ? (
                     <div className="bg-space-800/40 rounded-xl border border-space-border p-12 text-center">
                         <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-white mb-2">No Escalated Tickets</h3>
-                        <p className="text-slate-400">All tickets are being handled by regular technicians</p>
+                        <h3 className="text-lg font-bold text-white mb-2">
+                            {currentPage === 'alerts' ? 'No Critical Escalations' : 'No Escalated Tickets'}
+                        </h3>
+                        <p className="text-slate-400">
+                            {currentPage === 'alerts'
+                                ? 'All escalated tickets are within manageable risk levels'
+                                : 'All tickets are being handled by regular technicians'}
+                        </p>
                     </div>
                 ) : (
-                    escalatedTickets.map((ticket) => (
+                    filteredTickets.map((ticket) => (
                         <div key={ticket.id} className="bg-space-800/40 rounded-xl border border-rose-500/30 overflow-hidden hover:border-rose-500/50 transition-colors backdrop-blur-md">
                             <div className="p-6">
                                 <div className="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-6">

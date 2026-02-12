@@ -169,3 +169,4 @@ class TechnicianWorkload(BaseModel):
     technician_name: str
     assigned_tickets: int
     high_risk_tickets: int
+    role: str  # Added to match frontend expectations

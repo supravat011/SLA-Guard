@@ -4,16 +4,37 @@ import SLAProgressBar from '../components/SLAProgressBar';
 import { StatusBadge, PriorityBadge } from '../components/StatusBadge';
 import { Clock, CheckCircle, AlertCircle, PlayCircle, MessageSquare } from 'lucide-react';
 
-const TechnicianDashboard: React.FC = () => {
+interface TechnicianDashboardProps {
+  currentPage?: string;
+}
+
+const TechnicianDashboard: React.FC<TechnicianDashboardProps> = ({ currentPage = 'dashboard' }) => {
   const [tickets, setTickets] = useState<TicketResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<TicketResponse | null>(null);
   const [progressNotes, setProgressNotes] = useState('');
 
+  // Filter tickets based on current page
+  const getFilteredTickets = () => {
+    if (currentPage === 'alerts') {
+      // Show only high priority, critical, or SLA breached tickets
+      return tickets.filter(ticket =>
+        ticket.priority === 'CRITICAL' ||
+        ticket.priority === 'HIGH' ||
+        ticket.risk_percentage >= 75 ||
+        ticket.status === 'ESCALATED'
+      );
+    }
+    // For 'dashboard' and 'all-tickets', show all tickets
+    return tickets;
+  };
+
+  const filteredTickets = getFilteredTickets();
+
   useEffect(() => {
     loadTickets();
-    // Refresh every minute for live SLA countdown
-    const interval = setInterval(loadTickets, 60000);
+    // Refresh every 10 seconds for near real-time updates
+    const interval = setInterval(loadTickets, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -84,8 +105,14 @@ const TechnicianDashboard: React.FC = () => {
     <div className="p-6 space-y-6 min-h-full">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-wide">My Workspace</h2>
-          <p className="text-slate-400 text-sm">Prioritize tickets based on SLA timers</p>
+          <h2 className="text-2xl font-bold text-white tracking-wide">
+            {currentPage === 'alerts' ? 'Urgent Alerts' : currentPage === 'all-tickets' ? 'All Tickets' : 'My Workspace'}
+          </h2>
+          <p className="text-slate-400 text-sm">
+            {currentPage === 'alerts'
+              ? 'High priority and SLA-critical tickets requiring immediate attention'
+              : 'Prioritize tickets based on SLA timers'}
+          </p>
         </div>
         <div className="flex gap-4 text-sm font-medium text-slate-300 bg-space-800 px-4 py-2 rounded-lg border border-space-border">
           <span className="flex items-center gap-2">
@@ -93,26 +120,32 @@ const TechnicianDashboard: React.FC = () => {
             Online
           </span>
           <span className="text-space-border">|</span>
-          <span>{tickets.length} Tickets</span>
+          <span>{filteredTickets.length} Tickets</span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        {tickets.length === 0 ? (
+        {filteredTickets.length === 0 ? (
           <div className="bg-space-800/40 rounded-xl border border-space-border p-12 text-center">
             <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-white mb-2">No Assigned Tickets</h3>
-            <p className="text-slate-400">You're all caught up! New tickets will appear here when assigned.</p>
+            <h3 className="text-lg font-bold text-white mb-2">
+              {currentPage === 'alerts' ? 'No Urgent Alerts' : 'No Assigned Tickets'}
+            </h3>
+            <p className="text-slate-400">
+              {currentPage === 'alerts'
+                ? 'All tickets are within safe SLA limits!'
+                : "You're all caught up! New tickets will appear here when assigned."}
+            </p>
           </div>
         ) : (
-          tickets.map((ticket) => (
+          filteredTickets.map((ticket) => (
             <div key={ticket.id} className="bg-space-800/40 rounded-xl border border-space-border overflow-hidden hover:border-brand-500/30 transition-colors backdrop-blur-md">
               <div className="p-6">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
                   <div className="flex items-start gap-4">
                     <div className={`p-3 rounded-lg border ${ticket.priority === 'CRITICAL'
-                        ? 'bg-rose-500/10 text-rose-500 border-rose-500/20'
-                        : 'bg-brand-500/10 text-brand-400 border-brand-500/20'
+                      ? 'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                      : 'bg-brand-500/10 text-brand-400 border-brand-500/20'
                       }`}>
                       <AlertCircle className="w-6 h-6" />
                     </div>

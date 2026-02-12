@@ -89,12 +89,23 @@ def get_risk_distribution(
 @router.get("/technician-workload", response_model=List[TechnicianWorkload])
 def get_technician_workload(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_manager)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get workload summary for all technicians (Manager only)
     """
-    technicians = db.query(User).filter(User.role == UserRole.TECHNICIAN).all()
+    # Manual role check with better debugging
+    if current_user.role != UserRole.MANAGER:
+        print(f"DEBUG: User {current_user.email} (role: {current_user.role}) attempted to access technician-workload")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access denied. Manager role required. Your role: {current_user.role}"
+        )
+    
+    # Get both technicians and senior technicians
+    technicians = db.query(User).filter(
+        User.role.in_([UserRole.TECHNICIAN, UserRole.SENIOR_TECHNICIAN])
+    ).all()
     
     workload_data = []
     for tech in technicians:
@@ -114,7 +125,8 @@ def get_technician_workload(
                 technician_id=tech.id,
                 technician_name=tech.name,
                 assigned_tickets=assigned_tickets,
-                high_risk_tickets=high_risk_tickets
+                high_risk_tickets=high_risk_tickets,
+                role=tech.role.value  # Add role field
             )
         )
     

@@ -203,6 +203,11 @@ export const api = {
 
   // User Tickets
   users: {
+    getAllUsers: async (): Promise<User[]> => {
+      const response = await apiClient.get('/users');
+      return response.data;
+    },
+
     createTicket: async (data: { title: string; description?: string; priority: string }): Promise<TicketResponse> => {
       const response = await apiClient.post('/users/tickets', data);
       return response.data;

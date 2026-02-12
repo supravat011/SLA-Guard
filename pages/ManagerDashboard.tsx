@@ -12,7 +12,11 @@ interface User {
   role: string;
 }
 
-const ManagerDashboard: React.FC = () => {
+interface ManagerDashboardProps {
+  currentPage?: string;
+}
+
+const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ currentPage = 'dashboard' }) => {
   const [tickets, setTickets] = useState<TicketResponse[]>([]);
   const [technicians, setTechnicians] = useState<User[]>([]);
   const [seniorTechnicians, setSeniorTechnicians] = useState<User[]>([]);
@@ -20,30 +24,62 @@ const ManagerDashboard: React.FC = () => {
   const [selectedTicket, setSelectedTicket] = useState<number | null>(null);
   const [assigneeId, setAssigneeId] = useState<number | null>(null);
 
+  // Filter tickets based on current page
+  const getFilteredTickets = () => {
+    if (currentPage === 'alerts') {
+      // Show only unassigned, high priority, critical, or SLA breached tickets
+      return tickets.filter(ticket =>
+        !ticket.assignee_id ||
+        ticket.priority === 'CRITICAL' ||
+        ticket.priority === 'HIGH' ||
+        ticket.risk_percentage >= 75 ||
+        ticket.status === 'ESCALATED'
+      );
+    }
+    return tickets;
+  };
+
+  const filteredTickets = getFilteredTickets();
+
   useEffect(() => {
     loadData();
-    // Refresh every minute for live SLA updates
-    const interval = setInterval(loadData, 60000);
+    // Refresh every 10 seconds for near real-time updates
+    const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
     try {
-      const [ticketsData, analyticsData] = await Promise.all([
-        api.tickets.getAll(),
-        api.analytics.getTechnicianWorkload()
-      ]);
+      console.log('[ManagerDashboard] Loading data...');
+
+      // Load tickets first (this is the critical data)
+      const ticketsData = await api.tickets.getAll();
+      console.log('[ManagerDashboard] Tickets received:', ticketsData.length, 'tickets');
+      if (ticketsData.length > 0) {
+        console.log('[ManagerDashboard] First ticket:', ticketsData[0]);
+      }
       setTickets(ticketsData);
 
-      // Extract technicians and senior technicians from workload data
-      if (analyticsData && Array.isArray(analyticsData)) {
-        const techs = analyticsData.filter((u: any) => u.role === 'TECHNICIAN');
-        const seniors = analyticsData.filter((u: any) => u.role === 'SENIOR_TECHNICIAN');
+      // Load users to get technicians
+      try {
+        const allUsers = await api.users.getAllUsers();
+        console.log('[ManagerDashboard] Users received:', allUsers.length, 'users');
+
+        // Filter technicians and senior technicians
+        const techs = allUsers.filter((u: any) => u.role === 'TECHNICIAN');
+        const seniors = allUsers.filter((u: any) => u.role === 'SENIOR_TECHNICIAN');
+
+        console.log('[ManagerDashboard] Technicians:', techs.length, 'Senior Technicians:', seniors.length);
         setTechnicians(techs);
         setSeniorTechnicians(seniors);
+      } catch (usersError) {
+        console.warn('[ManagerDashboard] Failed to load users (non-critical):', usersError);
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('[ManagerDashboard] Error loading data:', error);
+      if (error instanceof Error) {
+        console.error('[ManagerDashboard] Error message:', error.message);
+      }
     }
   };
 
@@ -54,7 +90,8 @@ const ManagerDashboard: React.FC = () => {
       await api.ticketsExtended.reassign(ticketId, assigneeId);
       setSelectedTicket(null);
       setAssigneeId(null);
-      loadData();
+      // Immediately refresh to show updated ticket list
+      await loadData();
     } catch (error) {
       console.error('Error assigning ticket:', error);
     } finally {
@@ -93,8 +130,14 @@ const ManagerDashboard: React.FC = () => {
     <div className="p-6 space-y-6 min-h-full">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-wide">Manager Overview</h2>
-          <p className="text-slate-400 text-sm">Real-time risk monitoring and SLA tracking</p>
+          <h2 className="text-2xl font-bold text-white tracking-wide">
+            {currentPage === 'alerts' ? 'Critical Alerts' : currentPage === 'all-tickets' ? 'All Tickets' : 'Manager Overview'}
+          </h2>
+          <p className="text-slate-400 text-sm">
+            {currentPage === 'alerts'
+              ? 'Unassigned tickets and high-priority items requiring immediate action'
+              : 'Real-time risk monitoring and SLA tracking'}
+          </p>
         </div>
         <div className="flex gap-3">
           <button
@@ -152,11 +195,13 @@ const ManagerDashboard: React.FC = () => {
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Ticket Table (Takes up 2 cols) */}
-        <div className="lg:col-span-2 bg-space-800/40 rounded-xl border border-space-border overflow-hidden backdrop-blur-md">
+        {/* Ticket Table (Takes up full width now) */}
+        <div className="lg:col-span-3 bg-space-800/40 rounded-xl border border-space-border overflow-hidden backdrop-blur-md">
           <div className="p-6 border-b border-space-border flex justify-between items-center bg-space-800/30">
-            <h3 className="font-bold text-lg text-white">Priority Tickets</h3>
-            <span className="text-sm text-slate-400">{tickets.length} total</span>
+            <h3 className="font-bold text-lg text-white">
+              {currentPage === 'alerts' ? 'Critical Alerts' : 'Priority Tickets'}
+            </h3>
+            <span className="text-sm text-slate-400">{filteredTickets.length} total</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-slate-400">
@@ -171,14 +216,14 @@ const ManagerDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-space-border">
-                {tickets.length === 0 ? (
+                {filteredTickets.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                      No tickets found
+                      {currentPage === 'alerts' ? 'No critical alerts at this time' : 'No tickets found'}
                     </td>
                   </tr>
                 ) : (
-                  tickets.map((ticket) => (
+                  filteredTickets.map((ticket) => (
                     <tr key={ticket.id} className="hover:bg-space-700/30 transition-colors">
                       <td className="px-6 py-4 font-medium text-slate-200">#{ticket.id}</td>
                       <td className="px-6 py-4">{ticket.title}</td>
@@ -219,38 +264,7 @@ const ManagerDashboard: React.FC = () => {
         </div>
 
         {/* Analytics (Takes up 1 col) */}
-        <div className="bg-space-800/40 rounded-xl border border-space-border p-6 flex flex-col backdrop-blur-md">
-          <h3 className="font-bold text-lg text-white mb-6">Risk Distribution</h3>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={riskData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2E3248" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={12} stroke="#94a3b8" />
-                <YAxis hide />
-                <Tooltip
-                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                  contentStyle={{ backgroundColor: '#0B0C15', borderColor: '#2E3248', color: '#fff' }}
-                />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                  {riskData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-4 pt-4 border-t border-space-border">
-            {highRiskCount > 0 && (
-              <div className="flex items-center gap-3 p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg">
-                <AlertOctagon className="w-5 h-5 text-rose-500 flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-rose-400">Urgent Attention</p>
-                  <p className="text-xs text-rose-500/70">{highRiskCount} tickets require immediate action</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+
       </div>
 
       {/* Assignment Modal */}

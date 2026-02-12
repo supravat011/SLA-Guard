@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     print("\n" + "="*60)
-    print("🚀 Starting SLA Guard Backend Server")
+    print("🚀 Starting SLA Guard Backend Server (Debug Mode)")
     print("="*60)
     
     # Initialize database

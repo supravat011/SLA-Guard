@@ -44,7 +44,7 @@ def decode_access_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload
-    except JWTError:
+    except JWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -58,25 +58,46 @@ def get_current_user(
 ) -> User:
     """Get the current authenticated user from JWT token"""
     token = credentials.credentials
-    payload = decode_access_token(token)
     
-    user_id: int = payload.get("sub")
-    if user_id is None:
+    try:
+        payload = decode_access_token(token)
+        user_id_str: str = payload.get("sub")
+        
+        if user_id_str is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Convert string user_id to integer
+        try:
+            user_id = int(user_id_str)
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token format",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        user = db.query(User).filter(User.id == user_id).first()
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        return user
+        
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    return user
+    except HTTPException:
+        raise
 
 
 def require_role(required_role: UserRole):
@@ -93,11 +114,19 @@ def require_role(required_role: UserRole):
 
 def require_manager(current_user: User = Depends(get_current_user)) -> User:
     """Require manager role"""
+    print(f"DEBUG [require_manager]: Checking user {current_user.email} (ID: {current_user.id})")
+    print(f"DEBUG [require_manager]: User role: {current_user.role}")
+    print(f"DEBUG [require_manager]: User role type: {type(current_user.role)}")
+    print(f"DEBUG [require_manager]: UserRole.MANAGER: {UserRole.MANAGER}")
+    print(f"DEBUG [require_manager]: Comparison: {current_user.role} == {UserRole.MANAGER} = {current_user.role == UserRole.MANAGER}")
+    
     if current_user.role != UserRole.MANAGER:
+        print(f"DEBUG [require_manager]: ACCESS DENIED for {current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. Manager role required."
         )
+    print(f"DEBUG [require_manager]: ACCESS GRANTED for {current_user.email}")
     return current_user
 
 

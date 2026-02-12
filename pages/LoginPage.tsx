@@ -1,39 +1,50 @@
 import React, { useState } from 'react';
 import { UserRole } from '../types';
 import { ShieldCheck, Lock, Mail } from 'lucide-react';
+import { api } from '../services/api';
 
 interface LoginPageProps {
   onLogin: (role: UserRole) => void;
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
-  const [activeTab, setActiveTab] = useState<UserRole>(UserRole.USER);
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState('user@company.com');
-  const [password, setPassword] = useState('password123');
+  const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  const getDefaultEmail = () => {
-    switch (activeTab) {
-      case UserRole.MANAGER: return 'manager@company.com';
-      case UserRole.TECHNICIAN: return 'tech1@company.com';
-      case UserRole.SENIOR_TECHNICIAN: return 'senior1@company.com';
-      case UserRole.USER: return 'user@company.com';
-      default: return 'user@company.com';
-    }
-  };
-
-  // Update email when role changes
-  React.useEffect(() => {
-    setEmail(getDefaultEmail());
-  }, [activeTab]);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate network delay
-    setTimeout(() => {
-      onLogin(activeTab);
-    }, 800);
+    setError(null);
+
+    try {
+      // Call the actual backend API
+      const response = await api.auth.login({ email, password });
+
+      // Store the token in localStorage
+      localStorage.setItem('auth_token', response.access_token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+
+      // Map the backend role to UserRole enum
+      const roleMap: Record<string, UserRole> = {
+        'MANAGER': UserRole.MANAGER,
+        'TECHNICIAN': UserRole.TECHNICIAN,
+        'SENIOR_TECHNICIAN': UserRole.SENIOR_TECHNICIAN,
+        'USER': UserRole.USER
+      };
+
+      const userRole = roleMap[response.user.role] || UserRole.USER;
+      onLogin(userRole);
+    } catch (error: any) {
+      console.error('Login error:', error);
+      if (error.response?.status === 401) {
+        setError('Invalid email or password');
+      } else {
+        setError('Login failed. Please try again.');
+      }
+      setLoading(false);
+    }
   };
 
   return (
@@ -62,45 +73,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         </div>
 
         <div className="p-8">
-          {/* Role Toggle - 2x2 Grid */}
-          <div className="grid grid-cols-2 gap-2 bg-space-950 p-1 rounded-xl mb-8 border border-white/5">
-            <button
-              onClick={() => setActiveTab(UserRole.USER)}
-              className={`py-2 text-sm font-medium rounded-lg transition-all ${activeTab === UserRole.USER
-                ? 'bg-space-800 text-white shadow-lg border border-white/10'
-                : 'text-slate-500 hover:text-slate-300'
-                }`}
-            >
-              User
-            </button>
-            <button
-              onClick={() => setActiveTab(UserRole.TECHNICIAN)}
-              className={`py-2 text-sm font-medium rounded-lg transition-all ${activeTab === UserRole.TECHNICIAN
-                ? 'bg-space-800 text-white shadow-lg border border-white/10'
-                : 'text-slate-500 hover:text-slate-300'
-                }`}
-            >
-              Technician
-            </button>
-            <button
-              onClick={() => setActiveTab(UserRole.SENIOR_TECHNICIAN)}
-              className={`py-2 text-sm font-medium rounded-lg transition-all ${activeTab === UserRole.SENIOR_TECHNICIAN
-                ? 'bg-space-800 text-white shadow-lg border border-white/10'
-                : 'text-slate-500 hover:text-slate-300'
-                }`}
-            >
-              Senior Tech
-            </button>
-            <button
-              onClick={() => setActiveTab(UserRole.MANAGER)}
-              className={`py-2 text-sm font-medium rounded-lg transition-all ${activeTab === UserRole.MANAGER
-                ? 'bg-space-800 text-white shadow-lg border border-white/10'
-                : 'text-slate-500 hover:text-slate-300'
-                }`}
-            >
-              Manager
-            </button>
-          </div>
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 bg-rose-500/10 border border-rose-500/50 text-rose-400 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>

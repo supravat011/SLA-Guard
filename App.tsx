@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import RiskAnalytics from './pages/RiskAnalytics';
+
 import ManagerDashboard from './pages/ManagerDashboard';
 import TechnicianDashboard from './pages/TechnicianDashboard';
 import UserDashboard from './pages/UserDashboard';
@@ -16,14 +18,47 @@ function App() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState('dashboard');
 
+  // Initialize authentication state from localStorage on mount
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    const userDataStr = localStorage.getItem('user');
+
+    if (token && userDataStr) {
+      try {
+        const userData = JSON.parse(userDataStr);
+        const roleMap: Record<string, UserRole> = {
+          'MANAGER': UserRole.MANAGER,
+          'TECHNICIAN': UserRole.TECHNICIAN,
+          'SENIOR_TECHNICIAN': UserRole.SENIOR_TECHNICIAN,
+          'USER': UserRole.USER
+        };
+
+        const role = roleMap[userData.role] || UserRole.USER;
+        setUserRole(role);
+        setIsAuthenticated(true);
+        console.log('[App] Restored authentication from localStorage:', userData.email, userData.role);
+      } catch (error) {
+        console.error('[App] Error parsing user data from localStorage:', error);
+        // Clear invalid data
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+      }
+    }
+  }, []);
+
   const handleLogin = (role: UserRole = UserRole.MANAGER) => {
     setUserRole(role);
     setIsAuthenticated(true);
   };
 
   const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    // Reset state
     setIsAuthenticated(false);
     setUserRole(UserRole.MANAGER);
+    console.log('[App] User logged out');
   };
 
   const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
@@ -32,15 +67,18 @@ function App() {
   const renderDashboard = () => {
     switch (userRole) {
       case UserRole.MANAGER:
-        return <ManagerDashboard />;
+        if (activePage === 'analytics') {
+          return <RiskAnalytics currentPage={activePage} />;
+        }
+        return <ManagerDashboard currentPage={activePage} />;
       case UserRole.TECHNICIAN:
-        return <TechnicianDashboard />;
+        return <TechnicianDashboard currentPage={activePage} />;
       case UserRole.SENIOR_TECHNICIAN:
-        return <SeniorTechnicianDashboard />;
+        return <SeniorTechnicianDashboard currentPage={activePage} />;
       case UserRole.USER:
-        return <UserDashboard />;
+        return <UserDashboard currentPage={activePage} />;
       default:
-        return <ManagerDashboard />;
+        return <ManagerDashboard currentPage={activePage} />;
     }
   };
 
